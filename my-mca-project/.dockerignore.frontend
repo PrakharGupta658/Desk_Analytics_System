@@ -1,0 +1,6 @@
+# Place this file at: my-mca-project/.dockerignore
+node_modules
+build
+.git
+.env
+*.log
