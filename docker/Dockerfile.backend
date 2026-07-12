@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────
+# Stage 1: Build the fat jar with Maven
+# ─────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-17 AS builder
+
+WORKDIR /build
+
+# Copy pom.xml first — Maven dependencies are cached separately
+COPY pom.xml .
+RUN mvn dependency:resolve -q --batch-mode
+
+# Copy source and build
+COPY src ./src
+RUN mvn clean package -DskipTests -q --batch-mode
+
+# ─────────────────────────────────────────────────────────────
+# Stage 2: Minimal JRE runtime image
+# ─────────────────────────────────────────────────────────────
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+# Copy only the shaded (fat) jar from the build stage
+COPY --from=builder /build/target/desk-analytics-backend.jar app.jar
+
+# Expose HTTP port
+EXPOSE 8080
+
+# Health check — pings the live endpoint every 30s
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- "http://localhost:8080/api/occupancy/live?sensorId=2c:cf:67:ff:f5:f4" || exit 1
+
+CMD ["java", "-jar", "app.jar"]

@@ -1,0 +1,4 @@
+# Place this file at: backend/.dockerignore
+target
+.git
+*.log

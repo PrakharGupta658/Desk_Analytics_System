@@ -1,0 +1,218 @@
+name: CI/CD — Desk Occupancy System
+
+# Trigger on every push to main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]   # Run tests on PRs but don't deploy
+
+# Cancel in-progress runs if a new push happens
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  IMAGE_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}/desk-analytics
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 1: Test the Java backend
+  # ──────────────────────────────────────────────────────────
+  test-backend:
+    name: Test Backend (Java)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile backend
+        working-directory: ./backend
+        run: mvn compile -q --batch-mode
+
+      - name: Run backend tests
+        working-directory: ./backend
+        run: mvn test --batch-mode
+        # Note: if you have no tests yet, add -DskipTests temporarily
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 2: Test the React frontend
+  # ──────────────────────────────────────────────────────────
+  test-frontend:
+    name: Test Frontend (React)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: my-mca-project/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./my-mca-project
+        run: npm install --silent
+
+      - name: Build React app (catches compile errors)
+        working-directory: ./my-mca-project
+        run: DISABLE_ESLINT_PLUGIN=true npm run build
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 3: Test the Python ML service
+  # ──────────────────────────────────────────────────────────
+  test-ml-service:
+    name: Test ML Service (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: ml-service/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ./ml-service
+        run: pip install -r requirements.txt
+
+      - name: Verify ML service imports correctly
+        working-directory: ./ml-service
+        run: python -c "from train_model import FEATURES; print('Features OK:', FEATURES)"
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 4: Build & push Docker images to Docker Hub
+  # Runs only on push to main (not on PRs)
+  # Depends on all 3 test jobs passing
+  # ──────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [ test-backend, test-frontend, test-ml-service ]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./my-mca-project
+          file: ./docker/Dockerfile.frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-frontend:latest
+            ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./docker/Dockerfile.backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-backend:latest
+            ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push ML Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ml-service
+          file: ./docker/Dockerfile.mlservice
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-ml:latest
+            ${{ env.IMAGE_PREFIX }}-ml:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 5: Deploy to Linux server via SSH
+  # Runs only after images are pushed successfully
+  # ──────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Linux Server
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: "docker/docker-compose.prod.yml"
+          target: "~/desk-analytics/"
+
+      - name: Deploy on server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd ~/desk-analytics
+
+            # Write .env with secrets from GitHub
+            cat > .env << EOF
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            IMAGE_TAG=${{ github.sha }}
+            EOF
+
+            # Pull latest images from Docker Hub
+            docker-compose -f docker/docker-compose.prod.yml pull
+
+            # Restart containers with zero-downtime rolling update
+            docker-compose -f docker/docker-compose.prod.yml up -d --remove-orphans
+
+            # Clean up old unused images to free disk space
+            docker image prune -f
+
+            # Show running containers
+            docker-compose -f docker/docker-compose.prod.yml ps
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"

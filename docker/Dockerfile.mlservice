@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────
+# Python ML Prediction Microservice
+# Uses a slim Python image to keep the final image small
+# ─────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies first (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy ML service source files
+COPY train_model.py .
+COPY predict_service.py .
+
+# Copy pre-trained model if it exists
+# If it doesn't exist, the service starts without a model
+# and waits for a POST /retrain request
+COPY occupancy_model.pkl* ./
+
+EXPOSE 5001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')" || exit 1
+
+CMD ["python", "predict_service.py"]
