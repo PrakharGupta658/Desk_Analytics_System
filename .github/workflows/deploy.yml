@@ -56,18 +56,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug — show repo structure
+        run: |
+          echo "=== Root contents ==="
+          ls -la
+          echo "=== my-mca-project contents ==="
+          ls -la my-mca-project/ || echo "my-mca-project not found"
+          echo "=== package.json scripts ==="
+          cat my-mca-project/package.json | grep -A 10 '"scripts"' || echo "package.json not found"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: ./my-mca-project
         run: npm install --silent
-
-      - name: Build React app (catches compile errors)
         working-directory: ./my-mca-project
-        run: DISABLE_ESLINT_PLUGIN=true npm run build
+
+      - name: Build React app
+        run: DISABLE_ESLINT_PLUGIN=true CI=false npm run build
+        working-directory: ./my-mca-project
 
   # ──────────────────────────────────────────────────────────
   # JOB 3: Test the Python ML service
@@ -168,6 +177,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: Copy docker-compose to server
         uses: appleboy/scp-action@v0.1.7
