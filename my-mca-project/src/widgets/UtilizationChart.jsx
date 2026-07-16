@@ -127,7 +127,7 @@ export default function UtilizationChart() {
     const fromISO = opt.from.toISOString();
     const toISO   = opt.to.toISOString();
 
-    fetch(`http://localhost:8080/api/occupancy/weekly?sensorId=${encodeURIComponent(SENSOR_ID)}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`)
+    fetch(`http://13.62.42.254:8080/api/occupancy/weekly?sensorId=${encodeURIComponent(SENSOR_ID)}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`)
       .then(r => r.json())
       .then(setData)
       .catch(() => setError("Could not load weekly data"))

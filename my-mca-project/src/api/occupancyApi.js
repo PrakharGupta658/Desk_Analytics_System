@@ -16,7 +16,7 @@
 // }
 
 
-const BASE_URL = "http://localhost:8080/api/occupancy";
+const BASE_URL = "http://13.62.42.254:8080/api/occupancy";
 
 /**
  * Fetch the current snapshot for a given sensor.
