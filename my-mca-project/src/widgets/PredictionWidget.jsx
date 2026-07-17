@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { tokens } from "../styles/tokens";
 
-const ML_API   = "http://13.62.42.254:5001";
+const ML_API = process.env.REACT_APP_ML_URL || "http://localhost:5001";
 const SEAT_NUMS = [1, 2, 3, 4];
 
 const DAYS = [

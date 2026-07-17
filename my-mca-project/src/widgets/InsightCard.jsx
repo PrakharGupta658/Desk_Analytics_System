@@ -17,6 +17,8 @@ export default function InsightCard({ tone, text }) {
         padding: "12px 16px",
       }}
     >
+
+  
       <div
         style={{
           fontFamily: "'JetBrains Mono', monospace",
