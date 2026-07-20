@@ -7,7 +7,7 @@ import { fetchDeskTrend } from "./api/occupancyApi";
 import Kpi from "./widgets/Kpi";
 import Legend from "./widgets/Legend";
 import FloorPlan from "./widgets/FloorPlan";
-import TrendChart from "./widgets/TrendChart";
+import TodayAtAGlance from "./widgets/TodayAtAGlance";
 import UtilizationChart from "./widgets/UtilizationChart";
 import DeskTrendChart from "./widgets/DeskTrendChart";
 import PredictionWidget from "./widgets/PredictionWidget";
@@ -15,8 +15,8 @@ import PredictionWidget from "./widgets/PredictionWidget";
 const SENSOR_ID = "2c:cf:67:ff:f5:f4";
 
 export default function Dashboard() {
-  const { snapshot, trend, error, loading } = useOccupancyData(SENSOR_ID, 5000);
-  const [selected, setSelected] = useState(null);
+  const { snapshot, error, loading } = useOccupancyData(SENSOR_ID, 5000);
+  const [selected, setSelected]  = useState(null);
   const [deskTrend, setDeskTrend] = useState({ seats: [], points: [] });
 
   useEffect(() => {
@@ -55,16 +55,16 @@ export default function Dashboard() {
 
       {error && (
         <div style={{ background: tokens.panelRaised, border: `1px solid ${tokens.alert}`, color: tokens.alert, borderRadius: 8, padding: "10px 16px", fontSize: 13, marginBottom: 20 }}>
-          Could not reach the occupancy sensor : {error}
+          Couldn't reach the occupancy sensor: {error}
         </div>
       )}
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 14, marginBottom: 26, flexWrap: "wrap" }}>
-        <Kpi label="Occupancy rate" value={`${stats.rate}%`} sub={`${stats.occupied} of ${stats.total} seats in use`} accent={tokens.occupied} />
-        <Kpi label="Available now" value={stats.available} sub="Open seats on this sensor" accent={tokens.available} />
-        <Kpi label="Occupied" value={stats.occupied} sub="Currently in use" accent={tokens.occupied} />
-        <Kpi label="Total tracked" value={stats.total} sub="Seats reported by this sensor" />
+        <Kpi label="Occupancy rate"  value={`${stats.rate}%`}    sub={`${stats.occupied} of ${stats.total} seats in use`} accent={tokens.occupied} />
+        <Kpi label="Available now"   value={stats.available}      sub="Open seats on this sensor"                          accent={tokens.available} />
+        <Kpi label="Occupied"        value={stats.occupied}       sub="Currently in use"                                   accent={tokens.occupied} />
+        <Kpi label="Total tracked"   value={stats.total}          sub="Seats reported by this sensor" />
       </div>
 
       {/* Top grid */}
@@ -78,8 +78,8 @@ export default function Dashboard() {
           <div style={cardFootnote}>{selected ? `${selected.label} — ${selected.status}` : "Select a desk to inspect status"}</div>
         </div>
         <div style={card}>
-          <div style={cardTitle}>Live occupancy trend</div>
-          <TrendChart data={trend} />
+          <div style={cardTitle}>Today at a Glance</div>
+          <TodayAtAGlance snapshot={snapshot} />
         </div>
       </div>
 
@@ -102,7 +102,7 @@ export default function Dashboard() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
           <div style={{ ...cardTitle, fontSize: 15 }}>Occupancy Prediction &amp; AI Assistant</div>
           <div style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono', monospace", color: tokens.faint }}>
-            Historical pattern model
+            Historical pattern model · Claude AI chat
           </div>
         </div>
         <PredictionWidget />
